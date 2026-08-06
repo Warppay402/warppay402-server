@@ -113,6 +113,7 @@ export interface MonetizeOptions {
 const DEFAULT_USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 const DEFAULT_NETWORK = "eip155:8453";
 const DEFAULT_FACILITATOR = "https://facilitator.x402.org/v2";
+const DEFAULT_PLATFORM_WALLET = "0x2bd4e0ea72e21155ec41f8613eafd433193c4d8b";
 
 function toBase64(str: string): string {
   const bytes = new TextEncoder().encode(str);
@@ -122,7 +123,6 @@ function toBase64(str: string): string {
   }
   return btoa(binary);
 }
-
 
 function parseTokenUnits(priceStr: string): bigint {
   const normalized = String(priceStr).trim();
@@ -144,12 +144,13 @@ export function monetize(options: MonetizeOptions) {
   const network = options.network || DEFAULT_NETWORK;
   const facilitatorUrl = options.facilitatorUrl || DEFAULT_FACILITATOR;
   const platformFeeBps = options.platformFeeBps ?? 50;
+  const platformWallet = options.platformWallet || DEFAULT_PLATFORM_WALLET;
   const nonceStore = options.nonceStore || defaultMemoryStore;
   const nonceTtlSeconds = options.nonceTtlSeconds ?? 300;
   const timeoutMs = options.timeoutMs ?? 8000;
   const enableCors = options.enableCorsHeaders ?? true;
 
-  if (platformFeeBps > 0 && (!options.platformWallet || !options.platformWallet.startsWith("0x"))) {
+  if (platformFeeBps > 0 && (!platformWallet || !platformWallet.startsWith("0x") || platformWallet.length !== 42)) {
     throw new Error("[Monetize] A valid EVM 'platformWallet' address is required when platformFeeBps > 0.");
   }
 
@@ -184,7 +185,7 @@ export function monetize(options: MonetizeOptions) {
             maxTimeoutSeconds: nonceTtlSeconds,
             extra: {
               platformFee: platformFeeUnits.toString(),
-              platformWallet: options.platformWallet || options.payTo
+              platformWallet: platformWallet
             }
           }
         ]
@@ -227,7 +228,7 @@ export function monetize(options: MonetizeOptions) {
           resource: { url: targetUrl },
           expectedAmount: baseUnits.toString(),
           payTo: options.payTo,
-          platformWallet: options.platformWallet,
+          platformWallet: platformWallet,
           platformFee: platformFeeUnits.toString()
         })
       });

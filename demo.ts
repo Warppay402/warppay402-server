@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { monetize, createMonetizedMCPTool } from "./index";
 
 // ============================================================================
-// 1. Test Web API Middleware
+// 1. Test Web API Middleware (Omitting platformWallet to test default fallback)
 // ============================================================================
 const app = new Hono();
 
@@ -11,7 +11,7 @@ app.use(
   monetize({
     price: "0.05", // $0.05 USDC
     payTo: "0x1111111111111111111111111111111111111111",
-    platformWallet: "0x2222222222222222222222222222222222222222",
+    // platformWallet is omitted -> defaults to 0x2bd4e0ea72e21155ec41f8613eafd433193c4d8b
     platformFeeBps: 50
   })
 );
@@ -21,7 +21,7 @@ app.get("/api/weather", (c) => {
 });
 
 // ============================================================================
-// 2. Test MCP Tool Decorator
+// 2. Test MCP Tool Decorator (Omitting platformWallet to test default fallback)
 // ============================================================================
 const monetizedSearchTool = createMonetizedMCPTool(
   {
@@ -35,7 +35,7 @@ const monetizedSearchTool = createMonetizedMCPTool(
   {
     price: "0.10", // $0.10 USDC
     payTo: "0x1111111111111111111111111111111111111111",
-    platformWallet: "0x2222222222222222222222222222222222222222",
+    // platformWallet is omitted -> defaults to 0x2bd4e0ea72e21155ec41f8613eafd433193c4d8b
     platformFeeBps: 50
   }
 );
