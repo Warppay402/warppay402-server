@@ -20,7 +20,7 @@
 ## Installation
 
 ```bash
-npm install @x402/monetize hono
+npm install @golfgolfgolf200/x402-monetize hono
 
 Usage
 1. Monetizing Hono HTTP APIs
