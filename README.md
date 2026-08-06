@@ -20,7 +20,7 @@
 ## Installation
 
 ```bash
-npm install @golfgolfgolf200/x402-monetize hono
+npm install @heyheyhey850/x402-monetize hono
 
 Usage
 1. Monetizing Hono HTTP APIs
@@ -28,7 +28,7 @@ Usage
 TypeScript
 
 import { Hono } from "hono";
-import { monetize } from "@x402/monetize";
+import { monetize } from "@heyheyhey850/x402-monetize";
 
 const app = new Hono();
 
@@ -48,7 +48,7 @@ export default app;
 
 2. Monetizing MCP (Model Context Protocol) Tools
 
-import { createMonetizedMCPTool } from "@x402/monetize";
+import { createMonetizedMCPTool } from "@heyheyhey850/x402-monetize";
 
 const originalTool = {
   name: "web_scraper",
@@ -66,12 +66,12 @@ export const monetizedTool = createMonetizedMCPTool(originalTool, {
   platformFeeBps: 50
 });
 
-Distributed Nonce Locking with Redis / Upstash
+3. Distributed Nonce Locking with Redis / Upstash
 
 To enforce replay protection across serverless scale or multi-region instances, pass RedisNonceStore:
 
 import { Redis } from "@upstash/redis";
-import { monetize, RedisNonceStore } from "@x402/monetize";
+import { monetize, RedisNonceStore } from "@heyheyhey850/x402-monetize";
 
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL!,
