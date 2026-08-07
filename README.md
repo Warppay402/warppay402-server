@@ -1,8 +1,8 @@
-# @x402/monetize
+# @golfgolfgolf200/x402-monetize
 
 > Instant x402 V2 monetization SDK for Model Context Protocol (MCP) tools, Hono HTTP APIs, Cloudflare Monetization Gateway, and Base.
 
-`@x402/monetize` allows developers to monetize any MCP tool or HTTP API route in a few lines of code. It automatically generates standard x402 V2 HTTP payment challenges, verifies payment signatures, enforces platform fee splits, and prevents signature replay attacks.
+`@golfgolfgolf200/x402-monetize` allows developers to monetize any MCP tool or HTTP API route in a few lines of code. It automatically generates standard x402 V2 HTTP payment challenges, verifies payment signatures, enforces platform fee splits, and prevents signature replay attacks.
 
 ---
 
@@ -21,12 +21,9 @@
 
 ```bash
 npm install golfgolfgolf200/x402-monetize
-
-Usage
-1. Monetizing Hono HTTP APIs
-
-TypeScript
-
+```
+## Usage Case 1: Monetizing Hono HTTP APIs
+```typescript
 import { Hono } from "hono";
 import { monetize } from "@golfgolfgolf200/x402-monetize";
 
@@ -45,15 +42,17 @@ app.use(
 app.get("/api/data", (c) => c.json({ status: "success", content: "Monetized Payload" }));
 
 export default app;
+```
 
-2. Monetizing MCP (Model Context Protocol) Tools
-
+## Usage Case 2: Monetizing MCP (Model Context Protocol) Tools
+```typescript
 import { createMonetizedMCPTool } from "@golfgolfgolf200/x402-monetize";
+
 const originalTool = {
   name: "web_scraper",
   description: "Extract clean Markdown content from URLs",
   inputSchema: { type: "object", properties: { url: { type: "string" } } },
-  handler: async ({ url }) => {
+  handler: async ({ url }: { url: string }) => {
     return { markdown: "# Cleaned Markdown Content" };
   }
 };
@@ -64,11 +63,10 @@ export const monetizedTool = createMonetizedMCPTool(originalTool, {
   platformWallet: "0xYourPlatformTreasuryWallet",
   platformFeeBps: 50
 });
+```
 
-3. Distributed Nonce Locking with Redis / Upstash
-
-To enforce replay protection across serverless scale or multi-region instances, pass RedisNonceStore:
-
+## Usage Case 3: Distributed Nonce Locking with Redis / Upstash
+```typescript
 import { Redis } from "@upstash/redis";
 import { monetize, RedisNonceStore } from "@golfgolfgolf200/x402-monetize";
 
@@ -87,5 +85,5 @@ app.use(
     nonceTtlSeconds: 300
   })
 );
-
-License:MIT
+```
+## License: MIT
