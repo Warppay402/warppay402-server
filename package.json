@@ -1,5 +1,5 @@
 {
-  "name": "@heyheyhey850/x402-monetize",
+  "name": "@golfgolfgolf200/x402-monetize",
   "version": "1.0.0",
   "description": "Instant MCP Tool & x402 Monetization SDK for Cloudflare Gateway and Base",
   "main": "./dist/index.js",
@@ -17,13 +17,17 @@
   ],
   "scripts": {
     "build": "tsc --build",
-    "test": "vitest run"
+    "prepare": "npm run build",
+    "test": "vitest run",
+    "example": "tsx examples/basic-monetized-server.ts"
   },
   "dependencies": {
+    "@hono/node-server": "^2.1.0",
     "hono": "^4.13.0"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
+    "tsx": "^4.23.9",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   }

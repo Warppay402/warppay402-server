@@ -20,7 +20,7 @@
 ## Installation
 
 ```bash
-npm install @heyheyhey850/x402-monetize hono
+npm install golfgolfgolf200/x402-monetize
 
 Usage
 1. Monetizing Hono HTTP APIs
@@ -28,7 +28,7 @@ Usage
 TypeScript
 
 import { Hono } from "hono";
-import { monetize } from "@heyheyhey850/x402-monetize";
+import { monetize } from "@golfgolfgolf200/x402-monetize";
 
 const app = new Hono();
 
@@ -48,8 +48,7 @@ export default app;
 
 2. Monetizing MCP (Model Context Protocol) Tools
 
-import { createMonetizedMCPTool } from "@heyheyhey850/x402-monetize";
-
+import { createMonetizedMCPTool } from "@golfgolfgolf200/x402-monetize";
 const originalTool = {
   name: "web_scraper",
   description: "Extract clean Markdown content from URLs",
@@ -71,7 +70,7 @@ export const monetizedTool = createMonetizedMCPTool(originalTool, {
 To enforce replay protection across serverless scale or multi-region instances, pass RedisNonceStore:
 
 import { Redis } from "@upstash/redis";
-import { monetize, RedisNonceStore } from "@heyheyhey850/x402-monetize";
+import { monetize, RedisNonceStore } from "@golfgolfgolf200/x402-monetize";
 
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL!,
