@@ -1,4 +1,5 @@
 import { Context, Next } from "hono";
+import { x402Guard, GuardOptions } from "./guard.js";
 
 // ============================================================================
 // 1. Nonce Store Abstraction & Production Drivers
@@ -108,6 +109,8 @@ export interface MonetizeOptions {
   nonceTtlSeconds?: number;   // Replay window TTL (Default: 300s)
   timeoutMs?: number;          // Facilitator request timeout in ms (Default: 8000ms)
   enableCorsHeaders?: boolean; // Expose x402 headers to web applications (Default: true)
+  /** Enable pre-flight security scanning against prompt injection and velocity attacks */
+  guard?: boolean | GuardOptions;
 }
 
 const DEFAULT_USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
@@ -158,7 +161,25 @@ export function monetize(options: MonetizeOptions) {
   const platformFeeUnits = (baseUnits * BigInt(platformFeeBps)) / BigInt(10_000);
   const merchantUnits = baseUnits - platformFeeUnits;
 
+  // Pre-configure x402 guard middleware if requested
+  const guardMiddleware = options.guard
+    ? x402Guard(typeof options.guard === "object" ? options.guard : {})
+    : null;
+
   return async (c: Context, next: Next) => {
+    // STEP 0: Pre-flight security audit (Prompt injection & velocity firewall)
+    if (guardMiddleware) {
+      let guardPassed = false;
+      const guardRes = await guardMiddleware(c, async () => {
+        guardPassed = true;
+      });
+
+      // If guard returned a security response (422, 429, 413), pass that response back to Hono
+      if (!guardPassed) {
+        return guardRes;
+      }
+    }
+
     if (enableCors) {
       c.header("Access-Control-Expose-Headers", "PAYMENT-REQUIRED, PAYMENT-RESPONSE");
     }
