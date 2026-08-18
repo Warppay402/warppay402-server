@@ -9,7 +9,7 @@ export interface MCPToolDefinition {
 
 const DEFAULT_USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 const DEFAULT_NETWORK = "eip155:8453";
-const DEFAULT_FACILITATOR = "https://facilitator.x402.org/v2";
+const DEFAULT_FACILITATOR = "https://warppay402.com";
 const DEFAULT_PLATFORM_WALLET = "0x2bd4e0ea72e21155ec41f8613eafd433193c4d8b";
 const defaultMemoryStore = new MemoryNonceStore();
 
@@ -125,17 +125,29 @@ export function createMonetizedMCPTool(
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
+        let parsedPayload: any = {};
+        try {
+          const decodedString = atob(paymentSignature);
+          parsedPayload = JSON.parse(decodedString);
+        } catch {
+          await nonceStore.release(signatureHash);
+          throw new Error(JSON.stringify({ code: 400, message: "Invalid base64 payload in PAYMENT-SIGNATURE" }));
+        }
+
         const settleResponse = await fetch(`${facilitatorUrl}/settle`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           signal: controller.signal,
           body: JSON.stringify({
-            paymentSignature,
-            resource: { url: targetUrl },
-            expectedAmount: baseUnits.toString(),
-            payTo: options.payTo,
-            platformWallet: platformWallet,
-            platformFee: platformFeeUnits.toString()
+            paymentPayload: parsedPayload.paymentPayload || parsedPayload.payload,
+            paymentRequirements: parsedPayload.paymentRequirements || {
+              scheme: "exact",
+              network,
+              amount: merchantUnits.toString(),
+              asset,
+              payTo: options.payTo
+            },
+            resource: { url: targetUrl }
           })
         });
 
@@ -176,7 +188,7 @@ export function createMonetizedMCPTool(
       } catch (err: any) {
         await nonceStore.release(signatureHash);
         if (err.message?.startsWith("{")) {
-          throw err; // Re-throw formatted JSON error
+          throw err;
         }
         const isTimeout = err.name === "AbortError";
         throw new Error(

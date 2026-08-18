@@ -11,6 +11,11 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["index.ts", "monetize.ts", "mcpWrapper.ts"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["*.ts", "**/*.ts"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "src/**/*.test.ts"
+  ]
 }

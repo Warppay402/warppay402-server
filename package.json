@@ -23,10 +23,13 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.1.0",
-    "hono": "^4.13.0"
+    "@xpaysh/x402": "^0.1.2",
+    "dotenv": "^17.4.2",
+    "hono": "^4.13.0",
+    "viem": "^2.55.17"
   },
   "devDependencies": {
-    "@types/node": "^26.1.2",
+    "@types/node": "^26.2.0",
     "tsx": "^4.23.9",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"

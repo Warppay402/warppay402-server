@@ -6,21 +6,10 @@ import { x402Guard, GuardOptions } from "./guard.js";
 // ============================================================================
 
 export interface NonceStore {
-  /**
-   * Atomically claims a signature nonce.
-   * Returns `true` if successfully claimed, `false` if already present.
-   */
   claim(key: string, ttlSeconds: number): Promise<boolean>;
-
-  /**
-   * Releases a claimed nonce if settlement fails, allowing retry attempts.
-   */
   release(key: string): Promise<void>;
 }
 
-/**
- * Universal Web Crypto SHA-256 hasher compatible with Node.js, Deno, and Cloudflare Workers
- */
 async function hashSignature(signature: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(signature);
@@ -33,9 +22,6 @@ async function hashSignature(signature: string): Promise<string> {
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/**
- * Production In-Memory Nonce Store with proper expiration enforcement
- */
 export class MemoryNonceStore implements NonceStore {
   private cache = new Map<string, number>();
 
@@ -43,7 +29,6 @@ export class MemoryNonceStore implements NonceStore {
     const now = Date.now();
     const expiry = this.cache.get(key);
 
-    // If key exists and hasn't expired, block as replay
     if (expiry !== undefined && expiry > now) {
       return false;
     }
@@ -66,9 +51,6 @@ export class MemoryNonceStore implements NonceStore {
   }
 }
 
-/**
- * Production Redis / Upstash Nonce Store (Atomic SETNX + DEL)
- */
 export class RedisNonceStore implements NonceStore {
   constructor(
     private redisClient: {
@@ -97,25 +79,24 @@ const defaultMemoryStore = new MemoryNonceStore();
 // ============================================================================
 
 export interface MonetizeOptions {
-  price: string;               // e.g. "0.01" for 1 cent USDC
-  payTo: string;               // Merchant's payout wallet
-  asset?: string;              // Contract address (Defaults to USDC on Base)
-  network?: string;            // CAIP-2 ID (Defaults to "eip155:8453" for Base)
-  platformFeeBps?: number;     // Platform cut in basis points (50 bps = 0.5%)
-  platformWallet?: string;     // Treasury wallet address
-  facilitatorUrl?: string;     // Custom facilitator endpoint
+  price: string;
+  payTo: string;
+  asset?: string;
+  network?: string;
+  platformFeeBps?: number;
+  platformWallet?: string;
+  facilitatorUrl?: string;
   description?: string;
-  nonceStore?: NonceStore;     // Custom NonceStore instance
-  nonceTtlSeconds?: number;   // Replay window TTL (Default: 300s)
-  timeoutMs?: number;          // Facilitator request timeout in ms (Default: 8000ms)
-  enableCorsHeaders?: boolean; // Expose x402 headers to web applications (Default: true)
-  /** Enable pre-flight security scanning against prompt injection and velocity attacks */
+  nonceStore?: NonceStore;
+  nonceTtlSeconds?: number;
+  timeoutMs?: number;
+  enableCorsHeaders?: boolean;
   guard?: boolean | GuardOptions;
 }
 
 const DEFAULT_USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 const DEFAULT_NETWORK = "eip155:8453";
-const DEFAULT_FACILITATOR = "https://facilitator.x402.org/v2";
+const DEFAULT_FACILITATOR = "https://warppay402.com";
 const DEFAULT_PLATFORM_WALLET = "0x2bd4e0ea72e21155ec41f8613eafd433193c4d8b";
 
 function toBase64(str: string): string {
@@ -161,20 +142,17 @@ export function monetize(options: MonetizeOptions) {
   const platformFeeUnits = (baseUnits * BigInt(platformFeeBps)) / BigInt(10_000);
   const merchantUnits = baseUnits - platformFeeUnits;
 
-  // Pre-configure x402 guard middleware if requested
   const guardMiddleware = options.guard
     ? x402Guard(typeof options.guard === "object" ? options.guard : {})
     : null;
 
   return async (c: Context, next: Next) => {
-    // STEP 0: Pre-flight security audit (Prompt injection & velocity firewall)
     if (guardMiddleware) {
       let guardPassed = false;
       const guardRes = await guardMiddleware(c, async () => {
         guardPassed = true;
       });
 
-      // If guard returned a security response (422, 429, 413), pass that response back to Hono
       if (!guardPassed) {
         return guardRes;
       }
@@ -235,22 +213,30 @@ export function monetize(options: MonetizeOptions) {
       );
     }
 
-    // STEP 4: Verify & Settle via Facilitator (With Timeout & Nonce Release on Failure)
+    // STEP 4: Verify & Settle via Facilitator
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+      let parsedPayload: any = {};
+      try {
+        const decodedString = atob(paymentSignature);
+        parsedPayload = JSON.parse(decodedString);
+      } catch {
+        await nonceStore.release(signatureHash);
+        return c.json({ error: "Invalid base64 payload in PAYMENT-SIGNATURE" }, 400);
+      }
 
       const settleResponse = await fetch(`${facilitatorUrl}/settle`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
         body: JSON.stringify({
-          paymentSignature,
-          resource: { url: targetUrl },
-          expectedAmount: baseUnits.toString(),
-          payTo: options.payTo,
-          platformWallet: platformWallet,
-          platformFee: platformFeeUnits.toString()
+          signature: parsedPayload.signature || parsedPayload.paymentPayload?.signature,
+          authorization: parsedPayload.authorization || parsedPayload.paymentPayload?.authorization,
+          paymentPayload: parsedPayload,
+          paymentRequirements: parsedPayload.paymentRequirements,
+          resource: { url: targetUrl }
         })
       });
 
