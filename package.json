@@ -1,6 +1,6 @@
 {
   "name": "@golfgolfgolf200/x402-monetize",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Instant MCP Tool & x402 Monetization SDK for Cloudflare Gateway and Base",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -11,6 +11,20 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     }
+  },
+  "license": "MIT",
+  "keywords": [
+    "x402",
+    "mcp",
+    "monetization",
+    "base",
+    "usdc",
+    "hono",
+    "ai-agents"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/golfgolfgolf200/x402-monetize.git"
   },
   "files": [
     "dist"
