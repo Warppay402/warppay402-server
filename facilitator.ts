@@ -7,6 +7,12 @@ import { base } from "viem/chains";
 
 const app = new Hono();
 
+// Log every incoming request URL to debug the exact path hit by the SDK
+app.use("*", async (c, next) => {
+  console.log(`[Facilitator Debug] Incoming ${c.req.method} request to path: ${c.req.path}`);
+  await next();
+});
+
 const FACILITATOR_PRIVATE_KEY = process.env.FACILITATOR_PRIVATE_KEY as `0x${string}`;
 if (!FACILITATOR_PRIVATE_KEY) {
   console.error("Please set FACILITATOR_PRIVATE_KEY with a Base gas-holding key.");
@@ -17,23 +23,35 @@ const account = privateKeyToAccount(FACILITATOR_PRIVATE_KEY);
 const walletClient = createWalletClient({
   account,
   chain: base,
-  transport: http(process.env.RPC_URL || "https://mainnet.base.org")
+  transport: http(process.env.RPC_URL || "https://mainnet.base.org"),
 });
 
-// ⬇️ CHANGED TO transferWithAuthorization
 const usdcAbi = parseAbi([
-  "function transferWithAuthorization(address from, address to, uint256 value, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external"
+  "function transferWithAuthorization(address from, address to, uint256 value, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external",
 ]);
 
-app.post("/settle", async (c) => {
+// Shared handler logic for signature verification and on-chain broadcasting
+const handleSettle = async (c: any) => {
   try {
     const body = await c.req.json();
-    
-    const nested = body.paymentPayload || body.payload || {};
-    const signature = nested.signature || body.signature;
-    const authorization = nested.authorization || body.authorization;
+
+    // Extract authorization & signature regardless of payload nesting depth
+    const authorization = 
+  body.authorization || 
+  body.payload?.authorization || 
+  body.paymentPayload?.authorization || 
+  body.paymentPayload?.payload?.authorization ||
+  body.payload?.payload?.authorization;
+
+const signature = 
+  body.signature || 
+  body.payload?.signature || 
+  body.paymentPayload?.signature || 
+  body.paymentPayload?.payload?.signature ||
+  body.payload?.payload?.signature;
 
     if (!signature || !authorization) {
+      console.log("[Facilitator Debug] Received Body:", JSON.stringify(body, null, 2));
       return c.json({ success: false, error: "Missing signature or authorization payload" }, 400);
     }
 
@@ -42,7 +60,7 @@ app.post("/settle", async (c) => {
       name: "USD Coin",
       version: "2",
       chainId: 8453,
-      verifyingContract: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as `0x${string}`
+      verifyingContract: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as `0x${string}`,
     } as const;
 
     const types = {
@@ -52,8 +70,8 @@ app.post("/settle", async (c) => {
         { name: "value", type: "uint256" },
         { name: "validAfter", type: "uint256" },
         { name: "validBefore", type: "uint256" },
-        { name: "nonce", type: "bytes32" }
-      ]
+        { name: "nonce", type: "bytes32" },
+      ],
     } as const;
 
     const isValid = await verifyTypedData({
@@ -67,9 +85,9 @@ app.post("/settle", async (c) => {
         value: BigInt(authorization.value),
         validAfter: BigInt(authorization.validAfter),
         validBefore: BigInt(authorization.validBefore),
-        nonce: authorization.nonce
+        nonce: authorization.nonce,
       },
-      signature
+      signature,
     });
 
     if (!isValid) {
@@ -85,7 +103,7 @@ app.post("/settle", async (c) => {
     const txHash = await walletClient.writeContract({
       address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
       abi: usdcAbi,
-      functionName: "transferWithAuthorization", // ⬇️ CHANGED FUNCTION NAME
+      functionName: "transferWithAuthorization",
       args: [
         authorization.from,
         authorization.to,
@@ -95,19 +113,24 @@ app.post("/settle", async (c) => {
         authorization.nonce,
         v,
         r,
-        s
-      ]
+        s,
+      ],
     });
 
     return c.json({
       success: true,
       txHash,
-      network: "eip155:8453"
+      network: "eip155:8453",
     });
   } catch (err: any) {
     return c.json({ success: false, error: err.message }, 500);
   }
-});
+};
+
+// Listen on all standard routes to prevent 404 mismatch
+app.post("/", handleSettle);
+app.post("/settle", handleSettle);
+app.post("/verify", handleSettle);
 
 serve({ fetch: app.fetch, port: 3001 }, (info) => {
   console.log(`[Self-Hosted Facilitator] Running on http://localhost:${info.port}`);

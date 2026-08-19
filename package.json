@@ -1,6 +1,6 @@
 {
-  "name": "@golfgolfgolf200/x402-monetize",
-  "version": "1.0.2",
+  "name": "@warppay402/server",
+  "version": "1.0.0",
   "description": "Instant MCP Tool & x402 Monetization SDK for Cloudflare Gateway and Base",
   "homepage": "https://www.warppay402.com",
   "main": "./dist/index.js",
@@ -21,11 +21,12 @@
     "base",
     "usdc",
     "hono",
-    "ai-agents"
+    "ai-agents",
+    "warppay402"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/golfgolfgolf200/x402-monetize.git"
+    "url": "git+https://github.com/golfgolfgolf200/warppay402-server.git"
   },
   "files": [
     "dist"

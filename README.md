@@ -1,8 +1,8 @@
-# @golfgolfgolf200/x402-monetize ⚡
+# @warppay402/server ⚡
 
 > Instant x402 V2 monetization SDK and self-hosted infrastructure for Model Context Protocol (MCP) AI tools, Hono HTTP APIs, Cloudflare Monetization Gateway, and Base.
 
-`@golfgolfgolf200/x402-monetize` allows developers to monetize any MCP tool or HTTP API route in a few lines of code. It automatically generates standard x402 V2 HTTP payment challenges, verifies gasless EIP-712 signatures, enforces platform fee splits, protects against prompt injection threats, and prevents signature replay attacks.
+`@warppay402/server` allows developers to monetize any MCP tool or HTTP API route in a few lines of code. It automatically generates standard x402 V2 HTTP payment challenges, verifies gasless EIP-712 signatures, enforces platform fee splits, protects against prompt injection threats, and prevents signature replay attacks.
 
 Official Site: [https://www.warppay402.com](https://www.warppay402.com)
 
@@ -24,12 +24,12 @@ Official Site: [https://www.warppay402.com](https://www.warppay402.com)
 ## Installation
 
 ```bash
-npm install @golfgolfgolf200/x402-monetize
+npm install @warppay402/server
 ```
 ## Usage Case 1: Monetizing Hono HTTP APIs
 ```typescript
 import { Hono } from "hono";
-import { monetize } from "@golfgolfgolf200/x402-monetize";
+import { monetize } from "@warppay402/server";
 
 const app = new Hono();
 
@@ -50,7 +50,7 @@ export default app;
 ```
 ## Usage Case 2:  Monetizing MCP (Model Context Protocol) Tools
 ```typescript
-import { createMonetizedMCPTool } from "@golfgolfgolf200/x402-monetize";
+import { createMonetizedMCPTool } from "@warppay402/server";
 
 const originalTool = {
   name: "web_scraper",
@@ -72,7 +72,7 @@ export const monetizedTool = createMonetizedMCPTool(originalTool, {
 ## Usage Case 3: Distributed Nonce Locking with Redis / Upstash
 ```typescript
 import { Redis } from "@upstash/redis";
-import { monetize, RedisNonceStore } from "@golfgolfgolf200/x402-monetize";
+import { monetize, RedisNonceStore } from "@warppay402/server";
 
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL!,

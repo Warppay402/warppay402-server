@@ -1,37 +1,34 @@
-import { Hono } from "hono";
+import "dotenv/config";
 import { serve } from "@hono/node-server";
-import { monetize } from "@golfgolfgolf200/x402-monetize";
+import { monetize } from "../index.js";
+import { Hono } from "hono";
 
 const app = new Hono();
 
-// 1. Unmonetized health check endpoint
-app.get("/health", (c) => c.text("Server is healthy!"));
+// Define the developer's wallet address (where 99.5% of funds go)
+const developerWallet = "0x2bd4e0ea72e21155ec41f8613eafd433193c4d8b";
 
-// 2. Protect a route with x402 monetization
 app.use(
-  "/api/v1/paid-data",
+  "/api/weather",
   monetize({
-    price: "0.05", // $0.05 USDC per request (must be a string)
-    payTo: "0x1234567890123456789012345678901234567890", // EVM payout wallet
+    price: "0.01",
+    payTo: developerWallet,
+    platformWallet: "0x2bd4e0ea72e21155ec41f8613eafd433193c4d8b",
+    platformFeeBps: 50,
+    facilitatorUrl: "https://warppay402.com" 
   })
 );
 
-// 3. Monetized API route payload
-app.get("/api/v1/paid-data", (c) => {
+app.get("/api/weather", (c) => {
   return c.json({
-    success: true,
-    message: "Access granted! Payment verified successfully.",
-    data: {
-      insight: "Monetized API responses delivered seamlessly over x402.",
-      timestamp: new Date().toISOString(),
-    },
+    status: "success",
+    timestamp: new Date().toISOString(),
+    data: { city: "Austin", temperature: "78°F", condition: "Sunny" }
   });
 });
 
-const port = 3000;
-console.log(`🚀 Monetized server running on http://localhost:${port}`);
-
-serve({
-  fetch: app.fetch,
-  port,
+serve({ fetch: app.fetch, port: 3000 }, (info) => {
+  console.log(`[API Server] Running on http://localhost:${info.port}`);
 });
+
+export default app;
