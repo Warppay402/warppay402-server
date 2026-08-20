@@ -8,6 +8,10 @@ const app = new Hono();
 // Define the developer's wallet address (where 99.5% of funds go)
 const developerWallet = "0x2bd4e0ea72e21155ec41f8613eafd433193c4d8b";
 
+// Public Health Check Routes (For Glama & Uptime Bots)
+app.get("/", (c) => c.json({ status: "ok", service: "WarpPay402 Gateway" }));
+app.get("/health", (c) => c.json({ status: "healthy" }));
+
 app.use(
   "/api/weather",
   monetize({
