@@ -27,3 +27,6 @@ pids/
 # System & OS Files
 .DS_Store
 Thumbs.db
+
+# NPM & Registry Auth Tokens
+.npmrc

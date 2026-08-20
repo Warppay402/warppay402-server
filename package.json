@@ -13,6 +13,18 @@
       "default": "./dist/index.js"
     }
   },
+  "openclaw": {
+    "type": "mcp-server",
+    "compat": {
+      "pluginApi": ">=1.0.0"
+    },
+    "build": {
+      "openclawVersion": "1.0.0"
+    },
+    "config": {
+      "url": "https://api.warppay402.com/.well-known/mcp.json"
+    }
+  },
   "license": "MIT",
   "keywords": [
     "x402",
@@ -29,7 +41,8 @@
     "url": "git+https://github.com/golfgolfgolf200/warppay402-server.git"
   },
   "files": [
-    "dist"
+    "dist",
+    "openclaw.plugin.json"
   ],
   "scripts": {
     "build": "tsc --build",
