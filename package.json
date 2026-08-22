@@ -15,6 +15,9 @@
   },
   "openclaw": {
     "type": "mcp-server",
+    "extensions": [
+      "./dist/index.js"
+    ],
     "compat": {
       "pluginApi": ">=1.0.0"
     },

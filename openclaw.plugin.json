@@ -1,10 +1,16 @@
 {
+  "id": "warppay402-server",
   "name": "warppay402-server",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Instant MCP Tool & x402 Monetization SDK for Cloudflare Gateway and Base",
   "main": "dist/index.js",
   "type": "mcp-server",
   "config": {
     "url": "https://api.warppay402.com/.well-known/mcp.json"
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
   }
 }
