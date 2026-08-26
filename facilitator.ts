@@ -4,15 +4,11 @@ import { Hono } from "hono";
 import { createWalletClient, http, parseAbi, verifyTypedData } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { base } from "viem/chains";
+import { Connection, VersionedTransaction } from "@solana/web3.js";
 
 const app = new Hono();
 
-// Log every incoming request URL to debug the exact path hit by the SDK
-app.use("*", async (c, next) => {
-  console.log(`[Facilitator Debug] Incoming ${c.req.method} request to path: ${c.req.path}`);
-  await next();
-});
-
+// Base Viem Setup
 const FACILITATOR_PRIVATE_KEY = process.env.FACILITATOR_PRIVATE_KEY as `0x${string}`;
 if (!FACILITATOR_PRIVATE_KEY) {
   console.error("Please set FACILITATOR_PRIVATE_KEY with a Base gas-holding key.");
@@ -26,36 +22,67 @@ const walletClient = createWalletClient({
   transport: http(process.env.RPC_URL || "https://mainnet.base.org"),
 });
 
+// Solana RPC Setup
+const solanaConnection = new Connection(
+  process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com",
+  "confirmed"
+);
+
 const usdcAbi = parseAbi([
   "function transferWithAuthorization(address from, address to, uint256 value, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external",
 ]);
 
-// Shared handler logic for signature verification and on-chain broadcasting
 const handleSettle = async (c: any) => {
   try {
     const body = await c.req.json();
 
-    // Extract authorization & signature regardless of payload nesting depth
-    const authorization = 
-  body.authorization || 
-  body.payload?.authorization || 
-  body.paymentPayload?.authorization || 
-  body.paymentPayload?.payload?.authorization ||
-  body.payload?.payload?.authorization;
+    // Check if request is a Solana Settlement
+    const isSolana = 
+      body.network?.includes("solana") || 
+      body.paymentRequirements?.network?.includes("solana") ||
+      body.paymentPayload?.network?.includes("solana");
 
-const signature = 
-  body.signature || 
-  body.payload?.signature || 
-  body.paymentPayload?.signature || 
-  body.paymentPayload?.payload?.signature ||
-  body.payload?.payload?.signature;
+    if (isSolana) {
+      // 1. Extract serialized Solana transaction
+      const serializedTx = body.signature || body.paymentPayload?.signature || body.serializedTransaction;
+      if (!serializedTx) {
+        return c.json({ success: false, error: "Missing Solana transaction payload" }, 400);
+      }
+
+      // 2. Decode and broadcast Versioned Transaction to Solana L1
+      const txBuffer = Buffer.from(serializedTx, "base64");
+      const transaction = VersionedTransaction.deserialize(txBuffer);
+      
+      const txHash = await solanaConnection.sendRawTransaction(transaction.serialize(), {
+        skipPreflight: false,
+        preflightCommitment: "confirmed",
+      });
+
+      return c.json({
+        success: true,
+        txHash,
+        network: "solana:5eykt4wA89m8E5b9B5658p445VTc28",
+      });
+    }
+
+    // Default EVM (Base) Settlement Path
+    const authorization = 
+      body.authorization || 
+      body.payload?.authorization || 
+      body.paymentPayload?.authorization || 
+      body.paymentPayload?.payload?.authorization;
+
+    const signature = 
+      body.signature || 
+      body.payload?.signature || 
+      body.paymentPayload?.signature || 
+      body.paymentPayload?.payload?.signature;
 
     if (!signature || !authorization) {
-      console.log("[Facilitator Debug] Received Body:", JSON.stringify(body, null, 2));
       return c.json({ success: false, error: "Missing signature or authorization payload" }, 400);
     }
 
-    // 1. Verify EIP-712 Signature Off-Chain
+    // Verify & Broadcast EVM EIP-712
     const domain = {
       name: "USD Coin",
       version: "2",
@@ -94,12 +121,10 @@ const signature =
       return c.json({ success: false, error: "Invalid EIP-712 signature" }, 402);
     }
 
-    // 2. Extract v, r, s
     const r = `0x${signature.slice(2, 66)}` as `0x${string}`;
     const s = `0x${signature.slice(66, 130)}` as `0x${string}`;
     const v = parseInt(signature.slice(130, 132), 16);
 
-    // 3. Broadcast to Base Mainnet using transferWithAuthorization
     const txHash = await walletClient.writeContract({
       address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
       abi: usdcAbi,
@@ -127,7 +152,6 @@ const signature =
   }
 };
 
-// Listen on all standard routes to prevent 404 mismatch
 app.post("/", handleSettle);
 app.post("/settle", handleSettle);
 app.post("/verify", handleSettle);

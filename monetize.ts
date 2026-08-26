@@ -92,6 +92,7 @@ export interface MonetizeOptions {
   timeoutMs?: number;
   enableCorsHeaders?: boolean;
   guard?: boolean | GuardOptions;
+  accepts?: Array<Record<string, any>>;
 }
 
 const DEFAULT_USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
@@ -120,8 +121,12 @@ function parseTokenUnits(priceStr: string): bigint {
 }
 
 export function monetize(options: MonetizeOptions) {
-  if (!options.payTo || !options.payTo.startsWith("0x") || options.payTo.length !== 42) {
-    throw new Error("[Monetize] A valid 42-character EVM wallet address is required for 'payTo'.");
+  // NEW MULTI-CHAIN ADDRESS CHECK
+  const isEvm = options.payTo?.startsWith("0x") && options.payTo.length === 42;
+  const isSolana = options.payTo && options.payTo.length >= 32 && options.payTo.length <= 44;
+
+  if (!isEvm && !isSolana) {
+    throw new Error("[Monetize] 'payTo' must be a valid EVM address (0x...) or Solana public key.");
   }
 
   const asset = options.asset || DEFAULT_USDC_BASE;
@@ -174,7 +179,7 @@ export function monetize(options: MonetizeOptions) {
           description: options.description || "Monetized API Access",
           mimeType: "application/json"
         },
-        accepts: [
+        accepts: options.accepts || [
           {
             scheme: "exact",
             network,

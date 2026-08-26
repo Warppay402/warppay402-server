@@ -1,6 +1,6 @@
 {
   "name": "@warppay402/server",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Instant MCP Tool & x402 Monetization SDK for Cloudflare Gateway and Base",
   "homepage": "https://www.warppay402.com",
   "main": "./dist/index.js",
@@ -22,7 +22,7 @@
       "pluginApi": ">=1.0.0"
     },
     "build": {
-      "openclawVersion": "1.0.0"
+      "openclawVersion": "1.1.0"
     },
     "config": {
       "url": "https://api.warppay402.com/.well-known/mcp.json"
@@ -37,7 +37,8 @@
     "usdc",
     "hono",
     "ai-agents",
-    "warppay402"
+    "warppay402",
+    "solana"
   ],
   "repository": {
     "type": "git",
@@ -55,6 +56,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.1.0",
+    "@solana/web3.js": "^1.98.4",
     "@xpaysh/x402": "^0.1.2",
     "dotenv": "^17.4.2",
     "hono": "^4.13.0",

@@ -12,6 +12,9 @@ const developerWallet = "0x2bd4e0ea72e21155ec41f8613eafd433193c4d8b";
 app.get("/", (c) => c.json({ status: "ok", service: "WarpPay402 Gateway" }));
 app.get("/health", (c) => c.json({ status: "healthy" }));
 
+// Redirect root /mcp.json to /.well-known/mcp.json
+app.get("/mcp.json", (c) => c.redirect("/.well-known/mcp.json"));
+
 // Standard OpenClaw & Smithery plugin manifest routes
 app.get("/openclaw.plugin.json", (c) =>
   c.json({
