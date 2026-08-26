@@ -38,7 +38,11 @@
     "hono",
     "ai-agents",
     "warppay402",
-    "solana"
+    "solana",
+    "middleware",
+    "cloudfare",
+    "ai-agents",
+    "model-context-protocal"
   ],
   "repository": {
     "type": "git",
