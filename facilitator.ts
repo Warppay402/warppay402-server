@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-import { createWalletClient, http, parseAbi, verifyTypedData } from "viem";
+import { createPublicClient, createWalletClient, http, parseAbi, verifyTypedData } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { base } from "viem/chains";
 import { Connection, VersionedTransaction } from "@solana/web3.js";
@@ -16,6 +16,12 @@ if (!FACILITATOR_PRIVATE_KEY) {
 }
 
 const account = privateKeyToAccount(FACILITATOR_PRIVATE_KEY);
+
+const publicClient = createPublicClient({
+  chain: base,
+  transport: http(process.env.RPC_URL || "https://mainnet.base.org"),
+});
+
 const walletClient = createWalletClient({
   account,
   chain: base,
@@ -125,6 +131,12 @@ const handleSettle = async (c: any) => {
     const s = `0x${signature.slice(66, 130)}` as `0x${string}`;
     const v = parseInt(signature.slice(130, 132), 16);
 
+    // Fetch the next available pending nonce from the Base RPC node
+    const pendingNonce = await publicClient.getTransactionCount({
+      address: account.address,
+      blockTag: 'pending',
+    });
+
     const txHash = await walletClient.writeContract({
       address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
       abi: usdcAbi,
@@ -140,6 +152,7 @@ const handleSettle = async (c: any) => {
         r,
         s,
       ],
+      nonce: pendingNonce, // Explicitly prevents nonce collisions
     });
 
     return c.json({
