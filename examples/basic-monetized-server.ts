@@ -6,14 +6,14 @@ import { Hono } from "hono";
 const app = new Hono();
 
 // Define the developer's wallet address (where 99.5% of funds go)
-const developerWallet = "0x2bd4e0ea72e21155ec41f8613eafd433193c4d8b";
+const developerWallet = "0xYOUR_NEW_WALLET_ADDRESS";
 
 app.use(
   "/api/weather",
   monetize({
     price: "0.01",
     payTo: developerWallet,
-    platformWallet: "0x2bd4e0ea72e21155ec41f8613eafd433193c4d8b",
+    platformWallet: "0xYOUR_NEW_WALLET_ADDRESS",
     platformFeeBps: 50,
     facilitatorUrl: "https://warppay402.com" 
   })

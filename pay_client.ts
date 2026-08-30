@@ -8,14 +8,14 @@ if (!PRIVATE_KEY) {
   process.exit(1);
 }
 
-const account = privateKeyToAccount(PRIVATE_KEY);
+const account = privateKeyToAccount(PRIVATE_KEY.startsWith("0x") ? PRIVATE_KEY : `0x${PRIVATE_KEY}`);
 const walletClient = createWalletClient({
   account,
   chain: base,
   transport: http("https://mainnet.base.org")
 });
 
-const API_URL = process.env.API_URL || "http://localhost:3000/api/weather";
+const API_URL = process.env.API_URL || "http://localhost:3005/public_data_feed/base-usdc-token-contract.json";
 
 async function executeAgentPayment() {
   console.log(`[Agent] Probing endpoint: ${API_URL}`);
@@ -35,7 +35,9 @@ async function executeAgentPayment() {
   const challenge = JSON.parse(atob(paymentRequiredHeader));
   const requirement = challenge.accepts[0];
 
-  console.log(`[Agent] Payment required: $${Number(requirement.amount) / 1e6} USDC on Base`);
+  // Resolve amount safely (default to 1000 base units / 0.001 USDC if undefined)
+  const baseUnits = BigInt(requirement.amount || "1000");
+  console.log(`[Agent] Payment required: $${Number(baseUnits) / 1e6} USDC on Base`);
 
   // Step 2: Sign EIP-712 payment authorization
   const domain = {
@@ -61,12 +63,14 @@ async function executeAgentPayment() {
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("")}` as `0x${string}`;
 
+  const maxTimeout = requirement.maxTimeoutSeconds || 300;
+
   const authorization = {
     from: account.address,
     to: requirement.payTo as `0x${string}`,
-    value: requirement.amount,
+    value: baseUnits.toString(),
     validAfter: (now - 60).toString(),
-    validBefore: (now + requirement.maxTimeoutSeconds).toString(),
+    validBefore: (now + maxTimeout).toString(),
     nonce
   };
 
@@ -77,14 +81,14 @@ async function executeAgentPayment() {
     message: {
       from: account.address,
       to: requirement.payTo as `0x${string}`,
-      value: BigInt(requirement.amount),
+      value: baseUnits,
       validAfter: BigInt(now - 60),
-      validBefore: BigInt(now + requirement.maxTimeoutSeconds),
+      validBefore: BigInt(now + maxTimeout),
       nonce
     }
   });
 
-  // Step 3: Construct root-level payment payload compatible with XPay relayer
+  // Step 3: Construct payment payload
   const paymentSignaturePayload = JSON.stringify({
     x402Version: 2,
     scheme: "exact",
@@ -106,7 +110,7 @@ async function executeAgentPayment() {
 
   const responseData = await paidRes.json();
   console.log(`[Server Status]: ${paidRes.status}`);
-  console.log("[Server Payload]:", responseData);
+  console.log("[Server Payload]:", JSON.stringify(responseData, null, 2));
 }
 
 executeAgentPayment().catch(console.error);
