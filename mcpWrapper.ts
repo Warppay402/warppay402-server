@@ -10,7 +10,7 @@ export interface MCPToolDefinition {
 const DEFAULT_USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 const DEFAULT_NETWORK = "eip155:8453";
 const DEFAULT_FACILITATOR = "https://warppay402.com";
-const DEFAULT_PLATFORM_WALLET = "0xYOUR_NEW_WALLET_ADDRESS";
+const DEFAULT_PLATFORM_WALLET = "0x226df5aabe192fd2181555367c2f6b99da39c184";
 const defaultMemoryStore = new MemoryNonceStore();
 
 function parseTokenUnits(priceStr: string): bigint {
