@@ -3,36 +3,28 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { createPublicClient, createWalletClient, http, parseAbi, verifyTypedData } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { base } from "viem/chains";
+import { base, arbitrum } from "viem/chains"; // Import Arbitrum Chain
 import { Connection, VersionedTransaction } from "@solana/web3.js";
 
 const app = new Hono();
 
-// Base Viem Setup
 const FACILITATOR_PRIVATE_KEY = process.env.FACILITATOR_PRIVATE_KEY as `0x${string}`;
 if (!FACILITATOR_PRIVATE_KEY) {
-  console.error("Please set FACILITATOR_PRIVATE_KEY with a Base gas-holding key.");
+  console.error("Please set FACILITATOR_PRIVATE_KEY.");
   process.exit(1);
 }
 
 const account = privateKeyToAccount(FACILITATOR_PRIVATE_KEY);
 
-const publicClient = createPublicClient({
-  chain: base,
-  transport: http(process.env.RPC_URL || "https://mainnet.base.org"),
-});
+// Base Clients
+const basePublicClient = createPublicClient({ chain: base, transport: http(process.env.BASE_RPC_URL || "https://mainnet.base.org") });
+const baseWalletClient = createWalletClient({ account, chain: base, transport: http(process.env.BASE_RPC_URL || "https://mainnet.base.org") });
 
-const walletClient = createWalletClient({
-  account,
-  chain: base,
-  transport: http(process.env.RPC_URL || "https://mainnet.base.org"),
-});
+// Arbitrum Clients
+const arbPublicClient = createPublicClient({ chain: arbitrum, transport: http(process.env.ARBITRUM_RPC_URL || "https://arb1.arbitrum.io/rpc") });
+const arbWalletClient = createWalletClient({ account, chain: arbitrum, transport: http(process.env.ARBITRUM_RPC_URL || "https://arb1.arbitrum.io/rpc") });
 
-// Solana RPC Setup
-const solanaConnection = new Connection(
-  process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com",
-  "confirmed"
-);
+const solanaConnection = new Connection(process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com", "confirmed");
 
 const usdcAbi = parseAbi([
   "function transferWithAuthorization(address from, address to, uint256 value, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external",
@@ -41,59 +33,39 @@ const usdcAbi = parseAbi([
 const handleSettle = async (c: any) => {
   try {
     const body = await c.req.json();
+    const network = body.network || body.paymentRequirements?.network || body.paymentPayload?.network || "eip155:8453";
 
-    // Check if request is a Solana Settlement
-    const isSolana = 
-      body.network?.includes("solana") || 
-      body.paymentRequirements?.network?.includes("solana") ||
-      body.paymentPayload?.network?.includes("solana");
-
-    if (isSolana) {
-      // 1. Extract serialized Solana transaction
+    // 1. SOLANA PATH
+    if (network.includes("solana")) {
       const serializedTx = body.signature || body.paymentPayload?.signature || body.serializedTransaction;
-      if (!serializedTx) {
-        return c.json({ success: false, error: "Missing Solana transaction payload" }, 400);
-      }
+      if (!serializedTx) return c.json({ success: false, error: "Missing Solana payload" }, 400);
 
-      // 2. Decode and broadcast Versioned Transaction to Solana L1
       const txBuffer = Buffer.from(serializedTx, "base64");
       const transaction = VersionedTransaction.deserialize(txBuffer);
-      
-      const txHash = await solanaConnection.sendRawTransaction(transaction.serialize(), {
-        skipPreflight: false,
-        preflightCommitment: "confirmed",
-      });
+      const txHash = await solanaConnection.sendRawTransaction(transaction.serialize(), { skipPreflight: false, preflightCommitment: "confirmed" });
 
-      return c.json({
-        success: true,
-        txHash,
-        network: "solana:5eykt4wA89m8E5b9B5658p445VTc28",
-      });
+      return c.json({ success: true, txHash, network: "solana:5eykt4wA89m8E5b9B5658p445VTc28" });
     }
 
-    // Default EVM (Base) Settlement Path
-    const authorization = 
-      body.authorization || 
-      body.payload?.authorization || 
-      body.paymentPayload?.authorization || 
-      body.paymentPayload?.payload?.authorization;
-
-    const signature = 
-      body.signature || 
-      body.payload?.signature || 
-      body.paymentPayload?.signature || 
-      body.paymentPayload?.payload?.signature;
+    // 2. EVM PATH (Base & Arbitrum)
+    const authorization = body.authorization || body.payload?.authorization || body.paymentPayload?.authorization;
+    const signature = body.signature || body.payload?.signature || body.paymentPayload?.signature;
 
     if (!signature || !authorization) {
       return c.json({ success: false, error: "Missing signature or authorization payload" }, 400);
     }
 
-    // Verify & Broadcast EVM EIP-712
+    const isArbitrum = network === "eip155:42161";
+    const chainId = isArbitrum ? 42161 : 8453;
+    const usdcAddress = isArbitrum 
+      ? "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" // Arbitrum Native USDC
+      : "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // Base Native USDC
+
     const domain = {
       name: "USD Coin",
       version: "2",
-      chainId: 8453,
-      verifyingContract: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as `0x${string}`,
+      chainId,
+      verifyingContract: usdcAddress as `0x${string}`,
     } as const;
 
     const types = {
@@ -123,22 +95,22 @@ const handleSettle = async (c: any) => {
       signature,
     });
 
-    if (!isValid) {
-      return c.json({ success: false, error: "Invalid EIP-712 signature" }, 402);
-    }
+    if (!isValid) return c.json({ success: false, error: "Invalid EIP-712 signature" }, 402);
 
     const r = `0x${signature.slice(2, 66)}` as `0x${string}`;
     const s = `0x${signature.slice(66, 130)}` as `0x${string}`;
     const v = parseInt(signature.slice(130, 132), 16);
 
-    // Fetch the next available pending nonce from the Base RPC node
-    const pendingNonce = await publicClient.getTransactionCount({
+    const targetPublicClient = isArbitrum ? arbPublicClient : basePublicClient;
+    const targetWalletClient = isArbitrum ? arbWalletClient : baseWalletClient;
+
+    const pendingNonce = await targetPublicClient.getTransactionCount({
       address: account.address,
       blockTag: 'pending',
     });
 
-    const txHash = await walletClient.writeContract({
-      address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    const txHash = await targetWalletClient.writeContract({
+      address: usdcAddress as `0x${string}`,
       abi: usdcAbi,
       functionName: "transferWithAuthorization",
       args: [
@@ -152,14 +124,10 @@ const handleSettle = async (c: any) => {
         r,
         s,
       ],
-      nonce: pendingNonce, // Explicitly prevents nonce collisions
+      nonce: pendingNonce,
     });
 
-    return c.json({
-      success: true,
-      txHash,
-      network: "eip155:8453",
-    });
+    return c.json({ success: true, txHash, network: `eip155:${chainId}` });
   } catch (err: any) {
     return c.json({ success: false, error: err.message }, 500);
   }

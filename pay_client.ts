@@ -1,8 +1,9 @@
 import { createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { base } from "viem/chains";
+import "dotenv/config";
 
-const PRIVATE_KEY = process.env.PRIVATE_KEY as `0x${string}`;
+const PRIVATE_KEY = (process.env.PRIVATE_KEY || process.env.FACILITATOR_PRIVATE_KEY) as `0x${string}`;
 if (!PRIVATE_KEY) {
   console.error("Please set process.env.PRIVATE_KEY");
   process.exit(1);
