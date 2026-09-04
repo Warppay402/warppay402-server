@@ -93,6 +93,7 @@ export interface MonetizeOptions {
   enableCorsHeaders?: boolean;
   guard?: boolean | GuardOptions;
   accepts?: Array<Record<string, any>>;
+  extensions?: Record<string, any>;
 }
 
 const DEFAULT_USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
@@ -172,10 +173,13 @@ export function monetize(options: MonetizeOptions) {
 
     // STEP 1: Return HTTP 402 Challenge if signature is missing
     if (!paymentSignature) {
-      const challengePayload = {
+      // Force HTTPS scheme on target URL
+      const cleanUrl = targetUrl.replace("http://", "https://");
+
+      const challengePayload: Record<string, any> = {
         x402Version: 2,
         resource: {
-          url: targetUrl,
+          url: cleanUrl,
           description: options.description || "Monetized API Access",
           mimeType: "application/json"
         },
@@ -195,8 +199,21 @@ export function monetize(options: MonetizeOptions) {
         ]
       };
 
+      // Inject extensions if configured
+      if (options.extensions) {
+        challengePayload.extensions = options.extensions;
+      }
+
       c.header("PAYMENT-REQUIRED", toBase64(JSON.stringify(challengePayload)));
-      return c.json({ error: "Payment required", x402: challengePayload }, 402);
+
+      // Standard x402 V2 response format (root level metadata)
+      return c.json(
+        {
+          error: "Payment required",
+          ...challengePayload
+        },
+        402
+      );
     }
 
     // STEP 2: Signature format check
