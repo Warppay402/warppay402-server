@@ -1,6 +1,6 @@
 {
   "name": "@warppay402/server",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "Instant MCP Tool & x402 Monetization SDK for Cloudflare Gateway and Base",
   "homepage": "https://www.warppay402.com",
   "main": "./dist/index.js",
