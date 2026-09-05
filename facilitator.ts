@@ -3,27 +3,29 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { createPublicClient, createWalletClient, http, parseAbi, verifyTypedData } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { base, arbitrum } from "viem/chains"; // Import Arbitrum Chain
+import { base, arbitrum } from "viem/chains";
 import { Connection, VersionedTransaction } from "@solana/web3.js";
 
 const app = new Hono();
 
-const FACILITATOR_PRIVATE_KEY = process.env.FACILITATOR_PRIVATE_KEY as `0x${string}`;
-if (!FACILITATOR_PRIVATE_KEY) {
-  console.error("Please set FACILITATOR_PRIVATE_KEY.");
+// Flexible key handling to avoid missing env crashes
+const rawKey = process.env.FACILITATOR_PRIVATE_KEY || process.env.PRIVATE_KEY || process.env.PAYMENT_PRIVATE_KEY;
+if (!rawKey) {
+  console.error("❌ Missing private key in environment variables (FACILITATOR_PRIVATE_KEY or PRIVATE_KEY).");
   process.exit(1);
 }
 
-const account = privateKeyToAccount(FACILITATOR_PRIVATE_KEY);
+const pk = rawKey.startsWith("0x") ? rawKey : `0x${rawKey}`;
+const account = privateKeyToAccount(pk as `0x${string}`);
 
-// Base Clients
+// EVM RPC & Client Initialization
 const basePublicClient = createPublicClient({ chain: base, transport: http(process.env.BASE_RPC_URL || "https://mainnet.base.org") });
 const baseWalletClient = createWalletClient({ account, chain: base, transport: http(process.env.BASE_RPC_URL || "https://mainnet.base.org") });
 
-// Arbitrum Clients
 const arbPublicClient = createPublicClient({ chain: arbitrum, transport: http(process.env.ARBITRUM_RPC_URL || "https://arb1.arbitrum.io/rpc") });
 const arbWalletClient = createWalletClient({ account, chain: arbitrum, transport: http(process.env.ARBITRUM_RPC_URL || "https://arb1.arbitrum.io/rpc") });
 
+// Solana RPC Client
 const solanaConnection = new Connection(process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com", "confirmed");
 
 const usdcAbi = parseAbi([
@@ -37,7 +39,7 @@ const handleSettle = async (c: any) => {
 
     // 1. SOLANA PATH
     if (network.includes("solana")) {
-      const serializedTx = body.signature || body.paymentPayload?.signature || body.serializedTransaction;
+      const serializedTx = body.signature || body.paymentPayload?.signature || body.serializedTransaction || body.payload?.signature;
       if (!serializedTx) return c.json({ success: false, error: "Missing Solana payload" }, 400);
 
       const txBuffer = Buffer.from(serializedTx, "base64");
@@ -99,14 +101,15 @@ const handleSettle = async (c: any) => {
 
     const r = `0x${signature.slice(2, 66)}` as `0x${string}`;
     const s = `0x${signature.slice(66, 130)}` as `0x${string}`;
-    const v = parseInt(signature.slice(130, 132), 16);
+    let v = parseInt(signature.slice(130, 132), 16);
+    if (v < 27) v += 27; // EIP-155 v parameter normalization guard
 
     const targetPublicClient = isArbitrum ? arbPublicClient : basePublicClient;
     const targetWalletClient = isArbitrum ? arbWalletClient : baseWalletClient;
 
     const pendingNonce = await targetPublicClient.getTransactionCount({
       address: account.address,
-      blockTag: 'pending',
+      blockTag: "pending",
     });
 
     const txHash = await targetWalletClient.writeContract({
@@ -133,10 +136,12 @@ const handleSettle = async (c: any) => {
   }
 };
 
+// Routes for settlement, verification, and agentic.market healthchecks
+app.get("/health", (c) => c.json({ status: "healthy", facilitator: account.address }));
 app.post("/", handleSettle);
 app.post("/settle", handleSettle);
 app.post("/verify", handleSettle);
 
-serve({ fetch: app.fetch, port: 3001 }, (info) => {
-  console.log(`[Self-Hosted Facilitator] Running on http://localhost:${info.port}`);
+serve({ fetch: app.fetch, port: 3001, hostname: "127.0.0.1" }, (info) => {
+  console.log(`🚀 [Self-Hosted Facilitator] Listening on http://127.0.0.1:${info.port}`);
 });
