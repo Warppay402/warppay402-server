@@ -8,15 +8,26 @@ import { Connection, VersionedTransaction } from "@solana/web3.js";
 
 const app = new Hono();
 
-// Flexible key handling to avoid missing env crashes
-const rawKey = process.env.FACILITATOR_PRIVATE_KEY || process.env.PRIVATE_KEY || process.env.PAYMENT_PRIVATE_KEY;
-if (!rawKey) {
-  console.error("❌ Missing private key in environment variables (FACILITATOR_PRIVATE_KEY or PRIVATE_KEY).");
+// Flexible key handling with strict validation
+const rawKey = (
+  process.env.FACILITATOR_PRIVATE_KEY ||
+  process.env.PRIVATE_KEY ||
+  ""
+).trim();
+
+if (!rawKey || rawKey.includes("insert_your_new_private_key_here")) {
+  console.error("❌ Facilitator Startup Error: Missing or placeholder private key in .env");
   process.exit(1);
 }
 
-const pk = rawKey.startsWith("0x") ? rawKey : `0x${rawKey}`;
-const account = privateKeyToAccount(pk as `0x${string}`);
+const formattedPk = (rawKey.startsWith("0x") ? rawKey : `0x${rawKey}`) as `0x${string}`;
+
+if (!/^0x[0-9a-fA-F]{64}$/.test(formattedPk)) {
+  console.error("❌ Facilitator Startup Error: Private key must be a valid 64-hex-character string.");
+  process.exit(1);
+}
+
+const account = privateKeyToAccount(formattedPk);
 
 // EVM RPC & Client Initialization
 const basePublicClient = createPublicClient({ chain: base, transport: http(process.env.BASE_RPC_URL || "https://mainnet.base.org") });
@@ -143,5 +154,6 @@ app.post("/settle", handleSettle);
 app.post("/verify", handleSettle);
 
 serve({ fetch: app.fetch, port: 3001, hostname: "127.0.0.1" }, (info) => {
-  console.log(`🚀 [Self-Hosted Facilitator] Listening on http://127.0.0.1:${info.port}`);
+  console.log(`🚀 [Self-Hosted Facilitator] Online with address: ${account.address}`);
+  console.log(`   Listening on http://127.0.0.1:${info.port}`);
 });

@@ -1,6 +1,6 @@
 {
   "name": "@warppay402/server",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Instant MCP Tool & x402 Monetization SDK for Cloudflare Gateway and Base",
   "homepage": "https://www.warppay402.com",
   "main": "./dist/index.js",
@@ -40,13 +40,13 @@
     "warppay402",
     "solana",
     "middleware",
-    "cloudfare",
+    "cloudflare",
     "ai-agents",
-    "model-context-protocal"
+    "model-context-protocol"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/golfgolfgolf200/warppay402-server.git"
+    "url": "git+https://github.com/Warppay402/warppay402-server.git"
   },
   "files": [
     "dist",
