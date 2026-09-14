@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-import { createPublicClient, createWalletClient, http, parseAbi, verifyTypedData } from "viem";
+import { createPublicClient, createWalletClient, http, parseAbi, verifyTypedData, parseGwei } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { base, arbitrum } from "viem/chains";
 import { Connection, VersionedTransaction } from "@solana/web3.js";
@@ -29,12 +29,17 @@ if (!/^0x[0-9a-fA-F]{64}$/.test(formattedPk)) {
 
 const account = privateKeyToAccount(formattedPk);
 
-// EVM RPC & Client Initialization
-const basePublicClient = createPublicClient({ chain: base, transport: http(process.env.BASE_RPC_URL || "https://mainnet.base.org") });
-const baseWalletClient = createWalletClient({ account, chain: base, transport: http(process.env.BASE_RPC_URL || "https://mainnet.base.org") });
+// ==========================================
+// 1. FAST ANKR RPC CLIENT INITIALIZATION
+// ==========================================
+const BASE_RPC_URL = process.env.BASE_RPC_URL || "https://rpc.ankr.com/base";
+const ARBITRUM_RPC_URL = process.env.ARBITRUM_RPC_URL || "https://rpc.ankr.com/arbitrum";
 
-const arbPublicClient = createPublicClient({ chain: arbitrum, transport: http(process.env.ARBITRUM_RPC_URL || "https://arb1.arbitrum.io/rpc") });
-const arbWalletClient = createWalletClient({ account, chain: arbitrum, transport: http(process.env.ARBITRUM_RPC_URL || "https://arb1.arbitrum.io/rpc") });
+const basePublicClient = createPublicClient({ chain: base, transport: http(BASE_RPC_URL) });
+const baseWalletClient = createWalletClient({ account, chain: base, transport: http(BASE_RPC_URL) });
+
+const arbPublicClient = createPublicClient({ chain: arbitrum, transport: http(ARBITRUM_RPC_URL) });
+const arbWalletClient = createWalletClient({ account, chain: arbitrum, transport: http(ARBITRUM_RPC_URL) });
 
 // Solana RPC Client
 const solanaConnection = new Connection(process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com", "confirmed");
@@ -82,15 +87,15 @@ const handleSettle = async (c: any) => {
     } as const;
 
     const types = {
-      TransferWithAuthorization: [
-        { name: "from", type: "address" },
-        { name: "to", type: "address" },
-        { name: "value", type: "uint256" },
-        { name: "validAfter", type: "uint256" },
-        { name: "validBefore", type: "uint256" },
-        { name: "nonce", type: "bytes32" },
-      ],
-    } as const;
+  TransferWithAuthorization: [
+    { name: "from", type: "address" },
+    { name: "to", type: "address" },
+    { name: "value", type: "uint256" },
+    { name: "validAfter", type: "uint256" },
+    { name: "validBefore", type: "uint256" },
+    { name: "nonce", type: "bytes32" },
+  ],
+} as const;
 
     const isValid = await verifyTypedData({
       address: authorization.from,
@@ -118,10 +123,21 @@ const handleSettle = async (c: any) => {
     const targetPublicClient = isArbitrum ? arbPublicClient : basePublicClient;
     const targetWalletClient = isArbitrum ? arbWalletClient : baseWalletClient;
 
-    const pendingNonce = await targetPublicClient.getTransactionCount({
-      address: account.address,
-      blockTag: "pending",
-    });
+    // Parallelize Nonce and Gas Price fetching to eliminate round-trip latency
+    const [pendingNonce, gasPrice] = await Promise.all([
+      targetPublicClient.getTransactionCount({
+        address: account.address,
+        blockTag: "pending",
+      }),
+      targetPublicClient.getGasPrice(),
+    ]);
+
+    // ==========================================
+    // 2. OPTIMISTIC GAS BUMPING (EIP-1559)
+    // ==========================================
+    // Add 0.1 gwei priority fee to guarantee immediate inclusion in next block
+    const maxPriorityFeePerGas = parseGwei("0.1");
+    const maxFeePerGas = gasPrice + maxPriorityFeePerGas;
 
     const txHash = await targetWalletClient.writeContract({
       address: usdcAddress as `0x${string}`,
@@ -139,6 +155,8 @@ const handleSettle = async (c: any) => {
         s,
       ],
       nonce: pendingNonce,
+      maxFeePerGas,
+      maxPriorityFeePerGas,
     });
 
     return c.json({ success: true, txHash, network: `eip155:${chainId}` });

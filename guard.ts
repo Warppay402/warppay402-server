@@ -11,6 +11,18 @@ export interface GuardOptions {
   maxPayloadLength?: number;
   /** Action on detected threat: 'block' (422) or 'log-only' */
   mode?: "block" | "log-only";
+
+  /** 
+   * Trusted IPv4/IPv6 addresses that bypass velocity limits (e.g., CI/CD runners, internal worker nodes).
+   * Passed by the developer at runtime.
+   */
+  whitelistedIps?: string[];
+
+  /** 
+   * Automatically bypass rate limits for local loopback requests (`127.0.0.1` and `::1`).
+   * @default true
+   */
+  allowLoopback?: boolean;
 }
 
 export interface GuardAuditResult {
@@ -94,10 +106,24 @@ export function x402Guard(options: GuardOptions = {}) {
     customBlockedPatterns = [],
     maxPayloadLength = 50000,
     mode = "block",
+    whitelistedIps = [],
+    allowLoopback = true,
   } = options;
 
   return async (c: Context, next: Next): Promise<Response | void> => {
-    const clientKey = c.req.header("x-forwarded-for") || "unknown-client";
+    const clientIp =
+      c.req.header("cf-connecting-ip") ||
+      c.req.header("x-forwarded-for") ||
+      "127.0.0.1";
+
+    const isLoopback = clientIp === "127.0.0.1" || clientIp === "::1";
+    const isWhitelisted =
+      whitelistedIps.includes(clientIp) || (allowLoopback && isLoopback);
+
+    if (isWhitelisted) {
+      c.header("X-Guard-Inspected", "bypassed-whitelisted");
+      return await next();
+    }
 
     let body: unknown = {};
     try {
@@ -123,7 +149,7 @@ export function x402Guard(options: GuardOptions = {}) {
     }
 
     // 2. Velocity Check
-    if (velocityStore.isExceeded(clientKey, rateLimitMax, rateLimitWindowMs)) {
+    if (velocityStore.isExceeded(clientIp, rateLimitMax, rateLimitWindowMs)) {
       c.header("X-Guard-Blocked", "VELOCITY_EXCEEDED");
       if (mode === "block") {
         return c.json(
