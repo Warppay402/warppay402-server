@@ -1,4 +1,4 @@
-import { MonetizeOptions, MemoryNonceStore, NonceStore } from "./monetize";
+import { MonetizeOptions, MemoryNonceStore, NonceStore } from "./monetize.js";
 
 export interface MCPToolDefinition {
   name: string;
