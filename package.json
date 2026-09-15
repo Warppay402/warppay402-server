@@ -55,7 +55,8 @@
     "build": "tsc --build",
     "prepare": "npm run build",
     "test": "vitest run",
-    "example": "tsx examples/basic-monetized-server.ts"
+    "example": "tsx examples/basic-monetized-server.ts",
+    "version": "node -e \"const fs = require('fs'); const op = JSON.parse(fs.readFileSync('openclaw.plugin.json')); op.version = process.env.npm_package_version; fs.writeFileSync('openclaw.plugin.json', JSON.stringify(op, null, 2) + '\\n');\" && git add openclaw.plugin.json"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.0",
