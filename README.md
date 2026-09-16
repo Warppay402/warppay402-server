@@ -1,8 +1,8 @@
 # @warppay402/server ⚡
 
-> Instant x402 V2 monetization SDK and self-hosted infrastructure for Model Context Protocol (MCP) AI tools, Hono HTTP APIs, Cloudflare Monetization Gateway, Base, and Solana.
+> Instant x402 V2 monetization SDK and self-hosted infrastructure for Model Context Protocol (MCP) AI tools, Hono HTTP APIs, Cloudflare Monetization Gateway, Base, Solana, Arbitrum, and Arc Mainnet.
 
-`@warppay402/server` allows developers to monetize any MCP tool or HTTP API route in a few lines of code. It automatically generates standard x402 V2 HTTP payment challenges, verifies gasless EIP-712 / Solana L1 signatures, enforces platform fee splits, protects against prompt injection threats, and prevents signature replay attacks.
+`@warppay402/server` allows developers to monetize any MCP tool or HTTP API route in a few lines of code. It automatically generates standard x402 V2 HTTP payment challenges, verifies gasless EIP-712 / native USDC signatures, enforces platform fee splits, protects against prompt injection threats, and prevents signature replay attacks.
 
 Official Site: [https://www.warppay402.com](https://www.warppay402.com)
 
@@ -11,8 +11,8 @@ Official Site: [https://www.warppay402.com](https://www.warppay402.com)
 ## Features
 
 - **x402 V2 Compliant:** Standardized payment challenge headers (`PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE`, `PAYMENT-RESPONSE`).
-- **Multi-Chain Native:** Multi-chain challenge generation supporting **Base Mainnet** (`eip155:8453`) and **Solana Mainnet-Beta** (`solana:5eykt...`) out of the box.
-- **Gasless Off-Chain Signing:** Clients sign `TransferWithAuthorization` (Base) or pre-signed SPL-USDC transactions (Solana) without non-custodial friction.
+- **Multi-Chain Native:** Multi-chain challenge generation supporting **Base Mainnet** (`eip155:8453`), **Arbitrum One** (`eip155:42161`), **Solana Mainnet-Beta** (`solana:5eykt...`), and **Arc Mainnet** (`eip155:5042`) out of the box.
+- **Native USDC Gas & Off-Chain Signing:** Supports gasless `TransferWithAuthorization` (Base/Arbitrum), SPL-USDC (Solana), and direct native USDC value transfers (Arc Mainnet).
 - **Automated Platform Fee Split:** Configurable fee split in basis points (e.g., 50 BPS = 0.5%) routed directly during facilitator settlement.
 - **x402-Guard Security:** Pre-flight middleware protecting endpoints against prompt injection attacks, payload buffer overruns, and high-velocity traffic spikes.
 - **MCP Native Decorator:** Seamlessly wraps tools written for the Model Context Protocol.
@@ -31,7 +31,7 @@ npm install @warppay402/server
 
 ```typescript
 import { Hono } from "hono";
-import { monetize } from "@warppay402/server";
+import { monetize, DEFAULT_NETWORK_ARC, DEFAULT_USDC_ARC } from "@warppay402/server";
 
 const app = new Hono();
 
@@ -47,6 +47,12 @@ const monetizeConfig = {
       scheme: "exact",
       network: "eip155:8453", // Base Mainnet
       asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // Base USDC
+      payTo: "0xYourMerchantWalletAddress",
+    },
+    {
+      scheme: "exact",
+      network: "eip155:5042", // Arc Mainnet
+      asset: "0x0000000000000000000000000000000000000000", // Native USDC
       payTo: "0xYourMerchantWalletAddress",
     },
     {
@@ -85,9 +91,7 @@ const originalTool = {
   }
 };
 
-
 export const monetizedTool = createMonetizedMCPTool(originalTool, {
-
   price: "0.02", // $0.02 USDC
   payTo: "0xYourMerchantWalletAddress",
   platformWallet: "0xYourPlatformTreasuryWallet",

@@ -1,8 +1,8 @@
 {
   "id": "warppay402-server",
   "name": "warppay402-server",
-  "version": "1.2.5",
-  "description": "Self-hosted x402 monetization server for MCP tools and HTTP APIs: Non-custodial, multi-chain payments across Base Mainnet, Solana L1, and Arbitrum One",
+  "version": "1.2.6",
+  "description": "Self-hosted x402 monetization server for MCP tools and HTTP APIs: Non-custodial, multi-chain payments across Base Mainnet, Solana L1, Arbitrum One, and Arc Mainnet",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,

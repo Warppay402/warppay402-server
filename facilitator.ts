@@ -1,7 +1,15 @@
 import "dotenv/config";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-import { createPublicClient, createWalletClient, http, parseAbi, verifyTypedData, parseGwei } from "viem";
+import {
+  createPublicClient,
+  createWalletClient,
+  http,
+  parseAbi,
+  verifyTypedData,
+  parseGwei,
+  defineChain,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { base, arbitrum } from "viem/chains";
 import { Connection, VersionedTransaction } from "@solana/web3.js";
@@ -30,7 +38,26 @@ if (!/^0x[0-9a-fA-F]{64}$/.test(formattedPk)) {
 const account = privateKeyToAccount(formattedPk);
 
 // ==========================================
-// 1. FAST ANKR RPC CLIENT INITIALIZATION
+// 1. ARC MAINNET CHAIN & CLIENT DEFINITION
+// ==========================================
+export const arcMainnet = defineChain({
+  id: 5042,
+  name: "Arc Mainnet",
+  nativeCurrency: { name: "USD Coin", symbol: "USDC", decimals: 6 },
+  rpcUrls: {
+    default: { http: ["https://rpc.mainnet.arc.io"] },
+    public: { http: ["https://rpc.mainnet.arc.io"] },
+  },
+  blockExplorers: {
+    default: { name: "ArcScan", url: "https://explorer.arc.io" },
+  },
+});
+
+const ARC_RPC_URL = process.env.ARC_RPC_URL || "https://rpc.mainnet.arc.io";
+const arcPublicClient = createPublicClient({ chain: arcMainnet, transport: http(ARC_RPC_URL) });
+
+// ==========================================
+// 2. EVM & SOLANA CLIENT INITIALIZATION
 // ==========================================
 const BASE_RPC_URL = process.env.BASE_RPC_URL || "https://rpc.ankr.com/base";
 const ARBITRUM_RPC_URL = process.env.ARBITRUM_RPC_URL || "https://rpc.ankr.com/arbitrum";
@@ -65,7 +92,34 @@ const handleSettle = async (c: any) => {
       return c.json({ success: true, txHash, network: "solana:5eykt4wA89m8E5b9B5658p445VTc28" });
     }
 
-    // 2. EVM PATH (Base & Arbitrum)
+    // 2. ARC MAINNET NATIVE USDC PATH
+    const isArc = network === "eip155:5042";
+    if (isArc) {
+      const authorization = body.authorization || body.payload?.authorization || body.paymentPayload?.authorization || {};
+      const txHash = body.txHash || body.signature || body.paymentPayload?.signature || body.payload?.signature;
+
+      if (!txHash) {
+        return c.json({ success: false, error: "Missing transaction hash for Arc settlement verification" }, 400);
+      }
+
+      // On Arc, USDC is native currency—verify standard tx receipt, payee, and value
+      const tx = await arcPublicClient.getTransaction({ hash: txHash as `0x${string}` });
+      const receipt = await arcPublicClient.waitForTransactionReceipt({ hash: txHash as `0x${string}` });
+
+      const targetPayee = (authorization.to || body.paymentRequirements?.payTo || "").toLowerCase();
+      const requiredValue = BigInt(authorization.value || body.paymentRequirements?.amount || "0");
+
+      const isValidPayee = !targetPayee || tx.to?.toLowerCase() === targetPayee;
+      const isValidAmount = tx.value >= requiredValue;
+
+      if (receipt.status === "success" && isValidPayee && isValidAmount) {
+        return c.json({ success: true, txHash, network: "eip155:5042" });
+      } else {
+        return c.json({ success: false, error: "Arc native USDC transaction verification failed" }, 400);
+      }
+    }
+
+    // 3. EVM EIP-712 AUTHORIZATION PATH (Base & Arbitrum)
     const authorization = body.authorization || body.payload?.authorization || body.paymentPayload?.authorization;
     const signature = body.signature || body.payload?.signature || body.paymentPayload?.signature;
 
@@ -87,15 +141,15 @@ const handleSettle = async (c: any) => {
     } as const;
 
     const types = {
-  TransferWithAuthorization: [
-    { name: "from", type: "address" },
-    { name: "to", type: "address" },
-    { name: "value", type: "uint256" },
-    { name: "validAfter", type: "uint256" },
-    { name: "validBefore", type: "uint256" },
-    { name: "nonce", type: "bytes32" },
-  ],
-} as const;
+      TransferWithAuthorization: [
+        { name: "from", type: "address" },
+        { name: "to", type: "address" },
+        { name: "value", type: "uint256" },
+        { name: "validAfter", type: "uint256" },
+        { name: "validBefore", type: "uint256" },
+        { name: "nonce", type: "bytes32" },
+      ],
+    } as const;
 
     const isValid = await verifyTypedData({
       address: authorization.from,
@@ -133,7 +187,7 @@ const handleSettle = async (c: any) => {
     ]);
 
     // ==========================================
-    // 2. OPTIMISTIC GAS BUMPING (EIP-1559)
+    // OPTIMISTIC GAS BUMPING (EIP-1559)
     // ==========================================
     // Add 0.1 gwei priority fee to guarantee immediate inclusion in next block
     const maxPriorityFeePerGas = parseGwei("0.1");
@@ -165,7 +219,7 @@ const handleSettle = async (c: any) => {
   }
 };
 
-// Routes for settlement, verification, and agentic.market healthchecks
+// Routes for settlement, verification, and healthchecks
 app.get("/health", (c) => c.json({ status: "healthy", facilitator: account.address }));
 app.post("/", handleSettle);
 app.post("/settle", handleSettle);

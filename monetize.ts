@@ -96,8 +96,16 @@ export interface MonetizeOptions {
   extensions?: Record<string, any>;
 }
 
-const DEFAULT_USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-const DEFAULT_NETWORK = "eip155:8453";
+// Default Token & Network Identifiers
+export const DEFAULT_USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+export const DEFAULT_NETWORK_BASE = "eip155:8453";
+
+export const DEFAULT_USDC_ARBITRUM = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831";
+export const DEFAULT_NETWORK_ARBITRUM = "eip155:42161";
+
+export const DEFAULT_USDC_ARC = "0x0000000000000000000000000000000000000000";
+export const DEFAULT_NETWORK_ARC = "eip155:5042";
+
 const DEFAULT_FACILITATOR = "https://warppay402.com";
 const DEFAULT_PLATFORM_WALLET = "0x226df5aabe192fd2181555367c2f6b99da39c184";
 
@@ -131,7 +139,7 @@ export function monetize(options: MonetizeOptions) {
   }
 
   const asset = options.asset || DEFAULT_USDC_BASE;
-  const network = options.network || DEFAULT_NETWORK;
+  const network = options.network || DEFAULT_NETWORK_BASE;
   const facilitatorUrl = options.facilitatorUrl || DEFAULT_FACILITATOR;
   const platformFeeBps = options.platformFeeBps ?? 50;
   const platformWallet = options.platformWallet || DEFAULT_PLATFORM_WALLET;
