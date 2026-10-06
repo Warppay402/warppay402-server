@@ -1,5 +1,7 @@
 # @warppay402/server ⚡
 
+[![M8ven Score](https://m8ven.ai/badge/mcp/golfgolfgolf200-x402-monetize-ojdrdz)](https://m8ven.ai/mcp/golfgolfgolf200-x402-monetize-ojdrdz?s=readme)
+
 > Instant x402 V2 monetization SDK and self-hosted infrastructure for Model Context Protocol (MCP) AI tools, Hono HTTP APIs, Cloudflare Monetization Gateway, Base, Solana, Arbitrum, and Arc Mainnet.
 
 `@warppay402/server` allows developers to monetize any MCP tool or HTTP API route in a few lines of code. It automatically generates standard x402 V2 HTTP payment challenges, verifies gasless EIP-712 / native USDC signatures, enforces platform fee splits, protects against prompt injection threats, and prevents signature replay attacks.

@@ -133,9 +133,18 @@ const handleSettle = async (c: any) => {
       ? "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" // Arbitrum Native USDC
       : "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // Base Native USDC
 
+    // Define strict expected EIP-712 domain parameters for Circle USDC
+    const ALLOWED_DOMAINS: Record<string, { name: string; version: string }> = {
+      "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": { name: "USD Coin", version: "2" }, // Base USDC
+      "0xaf88d065e77c8cc2239327c5edb3a432268e5831": { name: "USD Coin", version: "2" }, // Arbitrum USDC
+    };
+
+    const tokenLower = usdcAddress.toLowerCase();
+    const expectedDomain = ALLOWED_DOMAINS[tokenLower] || { name: "USD Coin", version: "2" };
+
     const domain = {
-      name: "USD Coin",
-      version: "2",
+      name: expectedDomain.name,
+      version: expectedDomain.version,
       chainId,
       verifyingContract: usdcAddress as `0x${string}`,
     } as const;
