@@ -16,7 +16,10 @@ import { Connection, VersionedTransaction } from "@solana/web3.js";
 
 const app = new Hono();
 
-// Flexible key handling with strict validation
+// ==========================================
+// ENVIRONMENT & ACCOUNT INITIALIZATION
+// ==========================================
+
 const rawKey = (
   process.env.FACILITATOR_PRIVATE_KEY ||
   process.env.PRIVATE_KEY ||
@@ -75,6 +78,63 @@ const usdcAbi = parseAbi([
   "function transferWithAuthorization(address from, address to, uint256 value, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external",
 ]);
 
+// ==========================================
+// 3. EIP-3009 NONCE TRACKER (DOUBLE-SPEND GUARD)
+// ==========================================
+class SpentNonceStore {
+  private spentNonces = new Map<string, number>();
+
+  public hasSpentNonce(nonce: string): boolean {
+    const key = nonce.toLowerCase();
+    const expiry = this.spentNonces.get(key);
+    if (!expiry) return false;
+    if (Date.now() > expiry) {
+      this.spentNonces.delete(key);
+      return false;
+    }
+    return true;
+  }
+
+  public recordSpentNonce(nonce: string, ttlMs: number = 24 * 60 * 60 * 1000): void {
+    const key = nonce.toLowerCase();
+    this.spentNonces.set(key, Date.now() + ttlMs);
+  }
+}
+
+const nonceStore = new SpentNonceStore();
+
+// ==========================================
+// 4. EVM TRANSACTION SERIALIZATION QUEUE
+// ==========================================
+class EvmTxMutex {
+  private queue: Promise<void> = Promise.resolve();
+
+  public runExclusive<T>(task: () => Promise<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      this.queue = this.queue.then(async () => {
+        try {
+          const result = await task();
+          resolve(result);
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
+  }
+}
+
+const evmQueueMap = new Map<number, EvmTxMutex>();
+
+function getTxMutex(chainId: number): EvmTxMutex {
+  if (!evmQueueMap.has(chainId)) {
+    evmQueueMap.set(chainId, new EvmTxMutex());
+  }
+  return evmQueueMap.get(chainId)!;
+}
+
+// ==========================================
+// 5. SETTLEMENT HANDLER
+// ==========================================
 const handleSettle = async (c: any) => {
   try {
     const body = await c.req.json();
@@ -127,13 +187,17 @@ const handleSettle = async (c: any) => {
       return c.json({ success: false, error: "Missing signature or authorization payload" }, 400);
     }
 
+    // Check if EIP-3009 authorization nonce was already spent
+    if (authorization.nonce && nonceStore.hasSpentNonce(authorization.nonce)) {
+      return c.json({ success: false, error: "EIP-3009 authorization nonce already executed" }, 409);
+    }
+
     const isArbitrum = network === "eip155:42161";
     const chainId = isArbitrum ? 42161 : 8453;
-    const usdcAddress = isArbitrum 
+    const usdcAddress = isArbitrum
       ? "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" // Arbitrum Native USDC
       : "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // Base Native USDC
 
-    // Define strict expected EIP-712 domain parameters for Circle USDC
     const ALLOWED_DOMAINS: Record<string, { name: string; version: string }> = {
       "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": { name: "USD Coin", version: "2" }, // Base USDC
       "0xaf88d065e77c8cc2239327c5edb3a432268e5831": { name: "USD Coin", version: "2" }, // Arbitrum USDC
@@ -141,13 +205,6 @@ const handleSettle = async (c: any) => {
 
     const tokenLower = usdcAddress.toLowerCase();
     const expectedDomain = ALLOWED_DOMAINS[tokenLower] || { name: "USD Coin", version: "2" };
-
-    const domain = {
-      name: expectedDomain.name,
-      version: expectedDomain.version,
-      chainId,
-      verifyingContract: usdcAddress as `0x${string}`,
-    } as const;
 
     const types = {
       TransferWithAuthorization: [
@@ -160,67 +217,95 @@ const handleSettle = async (c: any) => {
       ],
     } as const;
 
-    const isValid = await verifyTypedData({
+    const message = {
+      from: authorization.from,
+      to: authorization.to,
+      value: BigInt(authorization.value),
+      validAfter: BigInt(authorization.validAfter),
+      validBefore: BigInt(authorization.validBefore),
+      nonce: authorization.nonce,
+    };
+
+    // EIP-712 Domain Version Fallback (Tries v2, falls back to v1)
+    let isValid = await verifyTypedData({
       address: authorization.from,
-      domain,
+      domain: {
+        name: expectedDomain.name,
+        version: "2",
+        chainId,
+        verifyingContract: usdcAddress as `0x${string}`,
+      },
       types,
       primaryType: "TransferWithAuthorization",
-      message: {
-        from: authorization.from,
-        to: authorization.to,
-        value: BigInt(authorization.value),
-        validAfter: BigInt(authorization.validAfter),
-        validBefore: BigInt(authorization.validBefore),
-        nonce: authorization.nonce,
-      },
+      message,
       signature,
     });
+
+    if (!isValid) {
+      isValid = await verifyTypedData({
+        address: authorization.from,
+        domain: {
+          name: expectedDomain.name,
+          version: "1",
+          chainId,
+          verifyingContract: usdcAddress as `0x${string}`,
+        },
+        types,
+        primaryType: "TransferWithAuthorization",
+        message,
+        signature,
+      });
+    }
 
     if (!isValid) return c.json({ success: false, error: "Invalid EIP-712 signature" }, 402);
 
     const r = `0x${signature.slice(2, 66)}` as `0x${string}`;
     const s = `0x${signature.slice(66, 130)}` as `0x${string}`;
     let v = parseInt(signature.slice(130, 132), 16);
-    if (v < 27) v += 27; // EIP-155 v parameter normalization guard
+    if (v < 27) v += 27;
 
     const targetPublicClient = isArbitrum ? arbPublicClient : basePublicClient;
     const targetWalletClient = isArbitrum ? arbWalletClient : baseWalletClient;
 
-    // Parallelize Nonce and Gas Price fetching to eliminate round-trip latency
-    const [pendingNonce, gasPrice] = await Promise.all([
-      targetPublicClient.getTransactionCount({
-        address: account.address,
-        blockTag: "pending",
-      }),
-      targetPublicClient.getGasPrice(),
-    ]);
+    // Mutex execution block prevents EVM nonce collision under high concurrency
+    const mutex = getTxMutex(chainId);
+    const txHash = await mutex.runExclusive(async () => {
+      const [pendingNonce, gasPrice] = await Promise.all([
+        targetPublicClient.getTransactionCount({
+          address: account.address,
+          blockTag: "pending",
+        }),
+        targetPublicClient.getGasPrice(),
+      ]);
 
-    // ==========================================
-    // OPTIMISTIC GAS BUMPING (EIP-1559)
-    // ==========================================
-    // Add 0.1 gwei priority fee to guarantee immediate inclusion in next block
-    const maxPriorityFeePerGas = parseGwei("0.1");
-    const maxFeePerGas = gasPrice + maxPriorityFeePerGas;
+      const maxPriorityFeePerGas = parseGwei("0.1");
+      const maxFeePerGas = gasPrice + maxPriorityFeePerGas;
 
-    const txHash = await targetWalletClient.writeContract({
-      address: usdcAddress as `0x${string}`,
-      abi: usdcAbi,
-      functionName: "transferWithAuthorization",
-      args: [
-        authorization.from,
-        authorization.to,
-        BigInt(authorization.value),
-        BigInt(authorization.validAfter),
-        BigInt(authorization.validBefore),
-        authorization.nonce,
-        v,
-        r,
-        s,
-      ],
-      nonce: pendingNonce,
-      maxFeePerGas,
-      maxPriorityFeePerGas,
+      return await targetWalletClient.writeContract({
+        address: usdcAddress as `0x${string}`,
+        abi: usdcAbi,
+        functionName: "transferWithAuthorization",
+        args: [
+          authorization.from,
+          authorization.to,
+          BigInt(authorization.value),
+          BigInt(authorization.validAfter),
+          BigInt(authorization.validBefore),
+          authorization.nonce,
+          v,
+          r,
+          s,
+        ],
+        nonce: pendingNonce,
+        maxFeePerGas,
+        maxPriorityFeePerGas,
+      });
     });
+
+    // Record nonce in spent store
+    if (authorization.nonce) {
+      nonceStore.recordSpentNonce(authorization.nonce);
+    }
 
     return c.json({ success: true, txHash, network: `eip155:${chainId}` });
   } catch (err: any) {
@@ -228,7 +313,9 @@ const handleSettle = async (c: any) => {
   }
 };
 
-// Routes for settlement, verification, and healthchecks
+// ==========================================
+// 6. ROUTES AND SERVER LIFECYCLE
+// ==========================================
 app.get("/health", (c) => c.json({ status: "healthy", facilitator: account.address }));
 app.post("/", handleSettle);
 app.post("/settle", handleSettle);
