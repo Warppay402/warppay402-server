@@ -9,6 +9,7 @@ import {
   verifyTypedData,
   parseGwei,
   defineChain,
+  type Chain,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { base, arbitrum } from "viem/chains";
@@ -43,7 +44,7 @@ const account = privateKeyToAccount(formattedPk);
 // ==========================================
 // 1. ARC MAINNET CHAIN & CLIENT DEFINITION
 // ==========================================
-export const arcMainnet = defineChain({
+export const arcMainnet: Chain = defineChain({
   id: 5042,
   name: "Arc Mainnet",
   nativeCurrency: { name: "USD Coin", symbol: "USDC", decimals: 6 },

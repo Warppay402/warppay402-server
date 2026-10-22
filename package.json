@@ -1,6 +1,7 @@
 {
   "name": "@warppay402/server",
-  "version": "1.2.10",
+  "type": "module",
+  "version": "1.2.11",
   "description": "Instant MCP Tool & x402 Monetization SDK for Cloudflare Gateway, Base, and Arc Mainnet",
   "homepage": "https://www.warppay402.com",
   "main": "./dist/index.js",
@@ -64,7 +65,7 @@
     "@solana/web3.js": "^1.98.4",
     "@xpaysh/x402": "^0.1.2",
     "dotenv": "^17.4.2",
-    "hono": "^4.13.0",
+    "hono": "^4.13.11",
     "viem": "^2.55.17"
   },
   "devDependencies": {
@@ -72,5 +73,11 @@
     "tsx": "^4.23.9",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "hono": "^4.13.11",
+    "stream-json": "^3.5.1",
+    "uuid": "^11.1.1",
+    "source-map-js": "^1.2.2"
   }
 }
