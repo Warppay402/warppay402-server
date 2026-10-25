@@ -1,8 +1,8 @@
 {
   "name": "@warppay402/server",
   "type": "module",
-  "version": "1.2.11",
-  "description": "Instant MCP Tool & x402 Monetization SDK for Cloudflare Gateway, Base, and Arc Mainnet",
+  "version": "1.2.12",
+  "description": "Instant MCP Tool & x402 Monetization SDK for Cloudflare Gateway, Base, Arc Mainnet, and Robinhood Chain",
   "homepage": "https://www.warppay402.com",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

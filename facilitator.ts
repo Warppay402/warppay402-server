@@ -61,6 +61,27 @@ const ARC_RPC_URL = process.env.ARC_RPC_URL || "https://rpc.mainnet.arc.io";
 const arcPublicClient = createPublicClient({ chain: arcMainnet, transport: http(ARC_RPC_URL) });
 
 // ==========================================
+// 1B. ROBINHOOD CHAIN & CLIENT DEFINITION
+// ==========================================
+const ROBINHOOD_RPC_URL = process.env.ROBINHOOD_RPC_URL || "https://rpc.mainnet.chain.robinhood.com";
+
+export const robinhoodChain: Chain = defineChain({
+  id: 4663,
+  name: "Robinhood Chain",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  rpcUrls: {
+    default: { http: [ROBINHOOD_RPC_URL] },
+    public: { http: [ROBINHOOD_RPC_URL] },
+  },
+  blockExplorers: {
+    default: { name: "Blockscout", url: "https://robinhoodchain.blockscout.com" },
+  },
+});
+
+const rhPublicClient = createPublicClient({ chain: robinhoodChain, transport: http(ROBINHOOD_RPC_URL) });
+const rhWalletClient = createWalletClient({ account, chain: robinhoodChain, transport: http(ROBINHOOD_RPC_URL) });
+
+// ==========================================
 // 2. EVM & SOLANA CLIENT INITIALIZATION
 // ==========================================
 const BASE_RPC_URL = process.env.BASE_RPC_URL || "https://rpc.ankr.com/base";
@@ -180,7 +201,7 @@ const handleSettle = async (c: any) => {
       }
     }
 
-    // 3. EVM EIP-712 AUTHORIZATION PATH (Base & Arbitrum)
+    // 3. EVM EIP-712 AUTHORIZATION PATH (Base, Robinhood & Arbitrum)
     const authorization = body.authorization || body.payload?.authorization || body.paymentPayload?.authorization;
     const signature = body.signature || body.payload?.signature || body.paymentPayload?.signature;
 
@@ -194,14 +215,18 @@ const handleSettle = async (c: any) => {
     }
 
     const isArbitrum = network === "eip155:42161";
-    const chainId = isArbitrum ? 42161 : 8453;
-    const usdcAddress = isArbitrum
+    const isRobinhood = network === "eip155:4663";
+    const chainId = isRobinhood ? 4663 : isArbitrum ? 42161 : 8453;
+    const usdcAddress = isRobinhood
+      ? "0x80e0e24718dbFcad49ECAA6F1e6C89A190586cA8" // Robinhood Chain Bridged USDC
+      : isArbitrum
       ? "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" // Arbitrum Native USDC
       : "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // Base Native USDC
 
     const ALLOWED_DOMAINS: Record<string, { name: string; version: string }> = {
       "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": { name: "USD Coin", version: "2" }, // Base USDC
       "0xaf88d065e77c8cc2239327c5edb3a432268e5831": { name: "USD Coin", version: "2" }, // Arbitrum USDC
+      "0x80e0e24718dbfcad49ecaa6f1e6c89a190586ca8": { name: "USD Coin", version: "2" }, // Robinhood Chain USDC
     };
 
     const tokenLower = usdcAddress.toLowerCase();
@@ -265,8 +290,8 @@ const handleSettle = async (c: any) => {
     let v = parseInt(signature.slice(130, 132), 16);
     if (v < 27) v += 27;
 
-    const targetPublicClient = isArbitrum ? arbPublicClient : basePublicClient;
-    const targetWalletClient = isArbitrum ? arbWalletClient : baseWalletClient;
+    const targetPublicClient = isRobinhood ? rhPublicClient : isArbitrum ? arbPublicClient : basePublicClient;
+    const targetWalletClient = isRobinhood ? rhWalletClient : isArbitrum ? arbWalletClient : baseWalletClient;
 
     // Mutex execution block prevents EVM nonce collision under high concurrency
     const mutex = getTxMutex(chainId);
